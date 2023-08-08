@@ -1,3 +1,0 @@
-[submodule "survex"]
-	path = survex
-	url = git@github.com:ojwb/survex.git

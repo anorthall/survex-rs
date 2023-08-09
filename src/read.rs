@@ -1,25 +1,32 @@
-use crate::point::Point;
-use crate::station::StationManager;
+//! Helper functions for reading Survex files
+//!
+//! At present, this module only contains a single function:
+//! [`load_from_path`][`crate::read::load_from_path`]. Refer to the documentation for that function,
+//! or the [examples in the documentation index][`crate`] for more information.
+
+use crate::data::SurveyData;
+use crate::station::Point;
+use crate::survex;
 use std::error::Error;
 use std::ffi::{c_char, CStr};
 use std::path::PathBuf;
 use std::ptr;
 
-/// Create a [`StationManager`] instance from a Survex file.
+/// Create a [`SurveyData`] instance from a Survex file.
 ///
 /// The path to the Survex file will be passed to the binding to the Survex C library, which will
 /// open and read the file. The data within the file will be iterated over to build a list of
 /// [Stations][`crate::station::Station`] and a graph of connections between them. The resulting
-/// [`StationManager`] will be returned.
-pub fn load_from_path(path: PathBuf) -> Result<StationManager, Box<dyn Error>> {
+/// [`SurveyData`] instance will be returned.
+pub fn load_from_path(path: PathBuf) -> Result<SurveyData, Box<dyn Error>> {
     // Convert the path to the format required by img.c
     let filename = path
         .to_str()
         .expect("Could not convert path to string")
         .as_ptr() as *const c_char;
 
-    // Create a StationManager to store and update data as it is read.
-    let mut manager = StationManager::new();
+    // Create an SurveyData instance to store and update data as it is read.
+    let mut manager = SurveyData::new();
 
     // The way Survex 3D file reading works is that it will first spit out a bunch of coordinates
     // and centrelines (determined by MOVE and LINE) commands, and it will then later give names
@@ -160,16 +167,6 @@ pub fn load_from_path(path: PathBuf) -> Result<StationManager, Box<dyn Error>> {
     manager.graph.extend_with_edges(&node_connections);
 
     Ok(manager)
-}
-
-/// A container module for the rust bindings to the Survex img library.
-mod survex {
-    #![allow(non_upper_case_globals)]
-    #![allow(non_camel_case_types)]
-    #![allow(non_snake_case)]
-    #![allow(dead_code)]
-    #![allow(clippy::upper_case_acronyms)]
-    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
 #[cfg(test)]

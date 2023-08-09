@@ -8,7 +8,7 @@ readme = "README.md"
 authors = ["Andrew Northall <andrew@northall.me.uk>"]
 keywords = ["caving", "caves", "cave-survey", "survex", "bindings"]
 categories = ["api-bindings", "external-ffi-bindings", "science::geo"]
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 include = ["**/*.rs", "lib/**/*", "Cargo.toml", "README.md", "LICENCE"]
 

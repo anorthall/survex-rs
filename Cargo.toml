@@ -8,8 +8,9 @@ readme = "README.md"
 authors = ["Andrew Northall <andrew@northall.me.uk>"]
 keywords = ["caving", "caves", "cave-survey", "survex", "bindings"]
 categories = ["api-bindings", "external-ffi-bindings", "science::geo"]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
+exclude = ["tests/data/*"]
 
 [dependencies]
 petgraph = "0.6.3"

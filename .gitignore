@@ -2,10 +2,6 @@
 /target
 /Cargo.lock
 
-# Build
-lib/survex/img.o
-lib/survex/libimg.a
-
 # Mac OS X
 .DS_Store
 

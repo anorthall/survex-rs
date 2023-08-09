@@ -44,6 +44,31 @@ impl SurveyData {
         None
     }
 
+    /// Retrieve a reference to a [`Station`] by its label, allowing for partial matches. If
+    /// multiple stations match the given label, [`None`] is returned, unless one of the matches is
+    /// an exact match, in which case that station is returned.
+    pub fn get_by_label_part(&self, label: &str) -> Option<RefStation> {
+        let matches = self
+            .stations
+            .iter()
+            .filter(|&node| node.borrow().label.contains(label))
+            .collect::<Vec<_>>();
+
+        if matches.len() == 1 {
+            return Some(Rc::clone(matches[0]));
+        } else {
+            for station in matches.iter() {
+                if station.borrow().label == label {
+                    return Some(Rc::clone(station));
+                }
+            }
+        }
+
+        // We have ruled out an exact match, so there is either no match or multiple matches, so
+        // just return None and hope the user can be more specific.
+        None
+    }
+
     /// Retrieve a reference to a [`Station`] by its coordinates. If multiple stations exist at the
     /// given coordinates, the first station found is returned.
     pub fn get_by_coords(&self, coords: &Point) -> Option<RefStation> {

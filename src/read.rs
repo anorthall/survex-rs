@@ -54,29 +54,37 @@ pub fn load_from_path(path: PathBuf) -> Result<SurveyData, Box<dyn Error>> {
     };
 
     // Open the Survex file and check that it was successful.
+    trace!(
+        "Opening Survex file '{:?}' in load_from_path function via Survex img library.",
+        path
+    );
     unsafe {
         pimg = survex::img_open_survey(filename, ptr::null_mut());
     }
     if pimg.is_null() {
+        trace!("Survex library returned a null pointer. Read failed.");
         return Err("Could not open Survex file".into());
     }
 
     // Read the data from the Survex file - loop through calls to img_read_item until it returns
     // a value below zero which indicates that the end of the data has been reached (-1) or that
     // there is an error (-2).
+    trace!("Reading Survex file in load_from_path function.");
     loop {
         let result = unsafe { survex::img_read_item(pimg, &mut p) };
 
         #[allow(clippy::if_same_then_else)]
         if result == -2 {
             // Bad data in Survex file
-            panic!("Bad data in Survex file");
+            panic!("Bad data in Survex file.");
         } else if result == -1 {
+            trace!("STOP: End of Survex file reached.");
             // STOP command
             break;
         } else if result == 0 {
             // MOVE command
             (x, y, z) = (p.x, p.y, p.z);
+            trace!("MOVE: {}, {}, {}.", x, y, z);
         } else if result == 1 {
             // LINE command
             // At this point (x, y, z) will have been set by a previous MOVE command. We can use
@@ -86,11 +94,11 @@ pub fn load_from_path(path: PathBuf) -> Result<SurveyData, Box<dyn Error>> {
             let from_coords = Point::new(x, y, z);
             let to_coords = Point::new(p.x, p.y, p.z);
             connections.push((from_coords, to_coords));
-            trace!("LINE: {:?} -> {:?}", from_coords, to_coords);
-
+            trace!("LINE: {} -> {}.", from_coords, to_coords);
             (x, y, z) = (p.x, p.y, p.z);
         } else if result == 2 {
             // CROSS command
+            trace!("CROSS command received. Ignoring.");
         } else if result == 3 {
             // LABEL command
             let flags;
@@ -100,31 +108,42 @@ pub fn load_from_path(path: PathBuf) -> Result<SurveyData, Box<dyn Error>> {
             }
             let coords = Point::new(p.x, p.y, p.z);
             let (station, _) = data.add_or_update(coords, label);
-            trace!("LABEL: {:?} -> {:?}", coords, label);
+            trace!("LABEL: {} -> {}.", coords, label);
 
             // Set the flags for the station
             if flags & 0x01 != 0 {
                 station.borrow_mut().surface = true;
+                trace!("LABEL: surface flag set for station '{}'.", label);
             }
             if flags & 0x02 != 0 {
                 station.borrow_mut().underground = true;
+                trace!("LABEL: underground flag set for station '{}'.", label);
             }
             if flags & 0x04 != 0 {
                 station.borrow_mut().entrance = true;
+                trace!("LABEL: entrance flag set for station '{}'.", label);
             }
             if flags & 0x08 != 0 {
                 station.borrow_mut().exported = true;
+                trace!("LABEL: exported flag set for station '{}'.", label);
             }
             if flags & 0x10 != 0 {
                 station.borrow_mut().fixed = true;
+                trace!("LABEL: fixed flag set for station '{}'.", label);
             }
             if flags & 0x20 != 0 {
                 // Anonymous stations are given a UUID as their label
                 station.borrow_mut().anonymous = true;
+                trace!("LABEL: anonymous flag set for station '{}'.", label);
                 station.borrow_mut().label = Uuid::new_v4().to_string();
+                trace!(
+                    "LABEL: UUID '{}' set for anonymous station.",
+                    station.borrow().label,
+                );
             }
             if flags & 0x40 != 0 {
                 station.borrow_mut().wall = true;
+                trace!("LABEL: wall flag set for station '{}'.", label);
             }
         } else if result == 4 {
             // XSECT command
@@ -140,9 +159,12 @@ pub fn load_from_path(path: PathBuf) -> Result<SurveyData, Box<dyn Error>> {
                 // previous label.
                 if flags & 0x20 == 0 {
                     label = CStr::from_ptr((*pimg).label).to_str().unwrap();
+                    trace!("XSECT: label set to '{}'.", label);
+                } else {
+                    trace!("XSECT: label not from {}.", label);
                 }
             }
-
+            trace!("XSECT: l={}, r={}, u={}, d={} for {}.", l, r, u, d, label);
             data.get_by_label(label)
                 .unwrap_or_else(|| panic!("Could not find station with label {:?}", label))
                 .borrow_mut()
@@ -150,12 +172,20 @@ pub fn load_from_path(path: PathBuf) -> Result<SurveyData, Box<dyn Error>> {
                 .update(l, r, u, d);
         } else if result == 5 {
             // XSECT_END command
+            trace!("XSECT_END command received. Ignoring.");
         } else if result == 6 {
             // ERROR_INFO command
+            trace!("ERROR_INFO command received. Ignoring.");
         } else {
             panic!("Unknown item type in Survex file");
         }
     }
+
+    trace!(
+        "Survex file reading complete. Processed {} stations and {} connections.",
+        data.stations.len(),
+        connections.len()
+    );
 
     // Survex file reading is complete. We now need to compile our list of connections between
     // two points into a list of connections between two nodes in the graph. To do this, we will
@@ -177,6 +207,16 @@ pub fn load_from_path(path: PathBuf) -> Result<SurveyData, Box<dyn Error>> {
     }
 
     data.graph.extend_with_edges(&node_connections);
+
+    trace!(
+        "Extended graph with {} connections.",
+        node_connections.len()
+    );
+    trace!(
+        "Graph now has {} nodes and {} edges.",
+        data.graph.node_count(),
+        data.graph.edge_count()
+    );
 
     Ok(data)
 }

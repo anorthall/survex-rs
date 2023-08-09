@@ -1,7 +1,14 @@
 [package]
 name = "survex-rs"
 description = "Rust bindings for the Survex 3D image processor."
+license = "GPL-3"
+license-file = "LICENSE"
+repository = "https://github.com/anorthall/survex-rs"
+homepage = "https://github.com/anorthall/survex-rs"
+readme = "README.md"
 authors = ["Andrew Northall <andrew@northall.me.uk>"]
+keywords = ["caving", "caves", "cave-survey", "survex", "bindings"]
+categories = ["api-bindings", "external-ffi-bindings", "science::geo"]
 version = "0.1.1"
 edition = "2021"
 

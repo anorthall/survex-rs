@@ -2,6 +2,7 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
+    let outdir_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     let libdir_path = PathBuf::from("lib/survex")
         .canonicalize()
         .expect("Cannot find survex/src directory");
@@ -11,10 +12,10 @@ fn main() {
         .to_str()
         .expect("Cannot convert path to string");
 
-    let obj_path = libdir_path.join("img.o");
-    let lib_path = libdir_path.join("libimg.a");
+    let obj_path = outdir_path.join("img.o");
+    let lib_path = outdir_path.join("libimg.a");
 
-    println!("cargo:rustc-link-search={}", libdir_path.to_str().unwrap());
+    println!("cargo:rustc-link-search={}", outdir_path.to_str().unwrap());
     println!("cargo:rustc-link-lib=img");
     println!("cargo:rerun-if-changed={}", headers_path_str);
 
@@ -49,8 +50,7 @@ fn main() {
         .generate()
         .expect("Unable to generate bindings");
 
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("bindings.rs");
     bindings
-        .write_to_file(out_path)
+        .write_to_file(outdir_path.join("bindings.rs"))
         .expect("Couldn't write bindings!");
 }

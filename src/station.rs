@@ -10,22 +10,38 @@ use std::fmt::{Display, Formatter};
 /// stations, use the graph provided by the [`SurveyData`][`crate::data::SurveyData`] instance.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Station {
+    /// The name of the survey station. Anonymous stations will be allocated a randomly generated
+    /// name (UUID v4).
     pub label: String,
+    /// The coordinates of the survey station.
     pub coords: Point,
+    /// The index of the survey station in the graph.
     pub index: NodeIndex,
+    /// The LRUD measurements of the survey station.
     pub lrud: LRUD,
+    /// Whether the survey station is on the surface.
     pub surface: bool,
+    /// Whether the survey station is underground.
     pub underground: bool,
+    /// Whether the survey station is an entrance.
     pub entrance: bool,
+    /// Whether the survey station is exported.
     pub exported: bool,
+    /// Whether the survey station is fixed.
     pub fixed: bool,
+    /// Whether the survey station is anonymous.
     pub anonymous: bool,
+    /// Whether the survey station is a wall.
     pub wall: bool,
 }
 
 impl Station {
     /// Create a new [`Station`] with the given label, coordinates and index. All flags will
     /// default to `false` and the [`LRUD`] measurements will default to `None`.
+    ///
+    /// You may wish to use a helper function, such as
+    /// [`read_from_path`][`crate::read::load_from_path`]
+    /// to import stations from a Survex file instead of calling this function directly
     pub fn new(label: String, coords: Point, index: NodeIndex) -> Self {
         Self {
             label,
@@ -110,6 +126,7 @@ impl Point {
 }
 
 impl Display for Point {
+    /// Format the [`Point`] as a comma-separated list of coordinates.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:.2}, {:.2}, {:.2}", self.x, self.y, self.z)
     }

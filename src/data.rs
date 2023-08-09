@@ -5,9 +5,9 @@ use petgraph::graph::{NodeIndex, UnGraph};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-type Stations = Vec<RefStation>;
-type RefStation = Rc<RefCell<Station>>;
-type StationGraph = UnGraph<String, f64>;
+pub type Stations = Vec<RefStation>;
+pub type RefStation = Rc<RefCell<Station>>;
+pub type StationGraph = UnGraph<String, f64>;
 
 /// Handles the creation and management of stations, as well as holding the
 /// [`graph`][`petgraph::graph::Graph`] of stations.
@@ -34,7 +34,9 @@ impl SurveyData {
         }
     }
 
-    /// Retrieve a reference to a [`Station`] by its label.
+    /// Retrieve a reference to a [`Station`] by its label. Only exact matches are returned. To
+    /// retrieve a station by partial label use
+    /// [`get_by_label_part`][`SurveyData::get_by_label_part`].
     pub fn get_by_label(&self, label: &str) -> Option<RefStation> {
         for station in &self.stations {
             if station.borrow().label == label {
@@ -44,11 +46,46 @@ impl SurveyData {
         None
     }
 
+    /// Retrieve a reference to a [`Station`] by its label, allowing for partial matches. If
+    /// multiple stations match the given label, [`None`] is returned, unless one of the matches is
+    /// an exact match, in which case that station is returned.
+    pub fn get_by_label_part(&self, label: &str) -> Option<RefStation> {
+        let matches = self
+            .stations
+            .iter()
+            .filter(|&node| node.borrow().label.contains(label))
+            .collect::<Vec<_>>();
+
+        if matches.len() == 1 {
+            return Some(Rc::clone(matches[0]));
+        } else {
+            for station in matches.iter() {
+                if station.borrow().label == label {
+                    return Some(Rc::clone(station));
+                }
+            }
+        }
+
+        // We have ruled out an exact match, so there is either no match or multiple matches, so
+        // just return None and hope the user can be more specific.
+        None
+    }
+
     /// Retrieve a reference to a [`Station`] by its coordinates. If multiple stations exist at the
     /// given coordinates, the first station found is returned.
     pub fn get_by_coords(&self, coords: &Point) -> Option<RefStation> {
         for station in &self.stations {
             if station.borrow().coords == *coords {
+                return Some(Rc::clone(station));
+            }
+        }
+        None
+    }
+
+    /// Retrieve a reference to a [`Station`] by its index in the graph.
+    pub fn get_by_index(&self, index: NodeIndex) -> Option<RefStation> {
+        for station in &self.stations {
+            if station.borrow().index == index {
                 return Some(Rc::clone(station));
             }
         }

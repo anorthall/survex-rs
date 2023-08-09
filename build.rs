@@ -46,6 +46,8 @@ fn main() {
 
     let bindings = bindgen::Builder::default()
         .header(headers_path_str)
+        .allowlist_function("img_.*")
+        .allowlist_type("img_.*")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()
         .expect("Unable to generate bindings");

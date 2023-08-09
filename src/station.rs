@@ -16,7 +16,14 @@ pub struct Station {
     pub label: String,
     pub coords: Point,
     pub index: NodeIndex,
-    pub lruds: Option<LRUD>,
+    pub lrud: LRUD,
+    pub surface: bool,
+    pub underground: bool,
+    pub entrance: bool,
+    pub exported: bool,
+    pub fixed: bool,
+    pub anonymous: bool,
+    pub wall: bool,
 }
 
 impl Station {
@@ -25,7 +32,14 @@ impl Station {
             label,
             coords,
             index,
-            lruds: None,
+            lrud: LRUD::default(),
+            surface: false,
+            underground: false,
+            entrance: false,
+            exported: false,
+            fixed: false,
+            anonymous: false,
+            wall: false,
         }
     }
 }
@@ -86,21 +100,50 @@ impl StationManager {
     /// If a [`Station`] with the given label already exists, the existing station is updated with
     /// the new coordinates and the existing index is returned. Otherwise, a new [`Station`] is
     /// created and added to the stations vector and the graph, and the new index is returned.
-    pub fn add_or_update(&mut self, coords: Point, label: &str) -> NodeIndex {
+    pub fn add_or_update(&mut self, coords: Point, label: &str) -> (RefStation, NodeIndex) {
+        if let Some(station) = self.get_by_label(label) {
+            let index = station.borrow().index;
+            let station_clone = Rc::clone(&station);
+            let mut station_mut = station.borrow_mut();
+            station_mut.coords = coords;
+            return (station_clone, index);
+        }
+
         let index = self.graph.add_node(String::from(label));
         let station = Station::new(String::from(label), coords, index);
-        self.stations.push(Rc::new(RefCell::new(station)));
-        index
+        let ref_station = Rc::new(RefCell::new(station));
+        let station_clone = Rc::clone(&ref_station);
+        self.stations.push(ref_station);
+        (station_clone, index)
     }
 }
 
 /// LRUD: Left, Right, Up, Down.
 /// These are the measurements taken from a station to the walls of a cave passage.
 /// The measurements are given in centimeters from the station to the wall.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct LRUD {
-    pub left: i32,
-    pub right: i32,
-    pub up: i32,
-    pub down: i32,
+    pub left: Option<f64>,
+    pub right: Option<f64>,
+    pub up: Option<f64>,
+    pub down: Option<f64>,
+}
+
+impl LRUD {
+    pub fn new(left: f64, right: f64, up: f64, down: f64) -> Self {
+        let mut lrud = Self::default();
+        lrud.update(left, right, up, down);
+        lrud
+    }
+
+    pub fn update(&mut self, left: f64, right: f64, up: f64, down: f64) {
+        let left = if left < 0.0 { None } else { Some(left) };
+        let right = if right < 0.0 { None } else { Some(right) };
+        let up = if up < 0.0 { None } else { Some(up) };
+        let down = if down < 0.0 { None } else { Some(down) };
+        self.left = left;
+        self.right = right;
+        self.up = up;
+        self.down = down;
+    }
 }

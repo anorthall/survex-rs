@@ -2,7 +2,7 @@
 name = "survex-rs"
 description = "Rust bindings for the Survex 3D image processor."
 authors = ["Andrew Northall <andrew@northall.me.uk>"]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

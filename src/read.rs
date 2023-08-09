@@ -32,14 +32,11 @@ pub fn load_from_path(path: PathBuf) -> Result<StationManager, Box<dyn Error>> {
     // After a call to img_read_item, pimg will be updated with information from the current item,
     // and p will be updated with the latest set of coordinates.
 
-    // x, y, z and label are used to store the previous label and set of coordinates after a
+    // (x, y, z) and label are used to store the previous label and set of coordinates after a
     // call to img_read_item, as the next call may require them (such as in the case of a LINE
     // command to create a leg between two points).
     let pimg;
-    let mut label: &str;
-    let mut x = -1.0;
-    let mut y = -1.0;
-    let mut z = -1.0;
+    let (mut x, mut y, mut z) = (-1.0, -1.0, -1.0);
     let mut p = survex::img_point {
         x: 0.0,
         y: 0.0,
@@ -59,6 +56,7 @@ pub fn load_from_path(path: PathBuf) -> Result<StationManager, Box<dyn Error>> {
     // there is an error (-2).
     loop {
         let result = unsafe { survex::img_read_item(pimg, &mut p) };
+
         #[allow(clippy::if_same_then_else)]
         if result == -2 {
             // Bad data in Survex file
@@ -82,23 +80,59 @@ pub fn load_from_path(path: PathBuf) -> Result<StationManager, Box<dyn Error>> {
             (x, y, z) = (p.x, p.y, p.z);
         } else if result == 2 {
             // CROSS command
-            // Ignore: CROSS is not implemented in Survex
         } else if result == 3 {
             // LABEL command
+            let (label, flags);
             unsafe {
                 label = CStr::from_ptr((*pimg).label).to_str().unwrap();
+                flags = (*pimg).flags & 0x7f;
             }
             let coords = Point::new(p.x, p.y, p.z);
-            manager.add_or_update(coords, label);
+            let (station, _) = manager.add_or_update(coords, label);
+
+            // Set the flags for the station
+            if flags & 0x01 != 0 {
+                station.borrow_mut().surface = true;
+            }
+            if flags & 0x02 != 0 {
+                station.borrow_mut().underground = true;
+            }
+            if flags & 0x04 != 0 {
+                station.borrow_mut().entrance = true;
+            }
+            if flags & 0x08 != 0 {
+                station.borrow_mut().exported = true;
+            }
+            if flags & 0x10 != 0 {
+                station.borrow_mut().fixed = true;
+            }
+            if flags & 0x20 != 0 {
+                station.borrow_mut().anonymous = true;
+            }
+            if flags & 0x40 != 0 {
+                station.borrow_mut().wall = true;
+            }
         } else if result == 4 {
             // XSECT command
-            // TODO: Handle XSECTs
+            let (l, r, u, d, label);
+            unsafe {
+                l = (*pimg).l;
+                r = (*pimg).r;
+                u = (*pimg).u;
+                d = (*pimg).d;
+                label = CStr::from_ptr((*pimg).label).to_str().unwrap();
+            }
+
+            manager
+                .get_by_label(label)
+                .unwrap_or_else(|| panic!("Could not find station with label {:?}", label))
+                .borrow_mut()
+                .lrud
+                .update(l, r, u, d);
         } else if result == 5 {
             // XSECT_END command
-            // TODO: Handle XSECTs
         } else if result == 6 {
             // ERROR_INFO command
-            // TODO: Handle error info
         } else {
             panic!("Unknown item type in Survex file");
         }
@@ -136,4 +170,127 @@ mod survex {
     #![allow(dead_code)]
     #![allow(clippy::upper_case_acronyms)]
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn load_file() {
+        let path = PathBuf::from("tests/data/0733.3d");
+        assert!(load_from_path(path).is_ok());
+    }
+
+    #[test]
+    fn load_invalid_file() {
+        let path = PathBuf::from("tests/data/this-file-does-not-exist.3d");
+        assert!(load_from_path(path).is_err());
+    }
+
+    /// Check that the correct number of stations are generated from the 3d file. The verification
+    /// values were created by checking how many NODE lines were generated when running the same 3d
+    /// file through Survex `dump3d`.
+    #[test]
+    fn check_correct_number_nodes_generated() {
+        let path = PathBuf::from("tests/data/0733.3d");
+        let manager = load_from_path(path).unwrap();
+        assert_eq!(manager.stations.len(), 6104);
+
+        let path = PathBuf::from("tests/data/nottsii.3d");
+        let manager = load_from_path(path).unwrap();
+        assert_eq!(manager.stations.len(), 1904);
+    }
+
+    #[test]
+    /// As above, the verification values were calculated by checking how many LEG lines were
+    /// generated when running the 3d file through Survex `dump3d` with the `-l` option.
+    fn check_correct_number_legs_generated() {
+        let path = PathBuf::from("tests/data/0733.3d");
+        let manager = load_from_path(path).unwrap();
+        assert_eq!(manager.graph.edge_count(), 5929);
+
+        let path = PathBuf::from("tests/data/nottsii.3d");
+        let manager = load_from_path(path).unwrap();
+        assert_eq!(manager.graph.edge_count(), 1782);
+    }
+
+    #[test]
+    fn test_absent_lrud_measurements_are_represented_correctly() {
+        let path = PathBuf::from("tests/data/nottsii.3d");
+        let manager = load_from_path(path).unwrap();
+        let station = manager
+            .get_by_label("nottsii.inlet5.inlet5-resurvey-4.22")
+            .unwrap();
+        let station = station.borrow();
+        assert_eq!(station.lrud.left, None);
+        assert_eq!(station.lrud.right, None);
+        assert_eq!(station.lrud.up, None);
+        assert_eq!(station.lrud.down, Some(9.0));
+    }
+
+    #[test]
+    fn test_lrud_measurements_are_represented_correctly() {
+        let path = PathBuf::from("tests/data/nottsii.3d");
+        let manager = load_from_path(path).unwrap();
+        let station = manager
+            .get_by_label("nottsii.inlet5.inlet5-resurvey-4.26")
+            .unwrap();
+        let station = station.borrow();
+        assert_eq!(station.lrud.left, Some(1.0));
+        assert_eq!(station.lrud.right, Some(0.0));
+        assert_eq!(station.lrud.up, Some(0.3));
+        assert_eq!(station.lrud.down, Some(0.6));
+    }
+
+    #[test]
+    fn test_flags_are_set_correctly() {
+        let path = PathBuf::from("tests/data/nottsii.3d");
+        let manager = load_from_path(path).unwrap();
+        let station = manager.get_by_label("nottsii.entrance").unwrap();
+        let station = station.borrow();
+        assert_eq!(station.surface, false);
+        assert_eq!(station.underground, false);
+        assert_eq!(station.entrance, true);
+        assert_eq!(station.exported, true);
+        assert_eq!(station.fixed, true);
+        assert_eq!(station.anonymous, false);
+        assert_eq!(station.wall, false);
+
+        let station = manager
+            .get_by_label("nottsii.inlet5.inlet5-resurvey-2.3.17")
+            .unwrap();
+        let station = station.borrow();
+        assert_eq!(station.surface, false);
+        assert_eq!(station.underground, true);
+        assert_eq!(station.entrance, false);
+        assert_eq!(station.exported, true);
+        assert_eq!(station.fixed, false);
+        assert_eq!(station.anonymous, false);
+        assert_eq!(station.wall, false);
+
+        let station = manager
+            .get_by_label("nottsii.mainstreamway.mainstreamway3.27")
+            .unwrap();
+        let station = station.borrow();
+        assert_eq!(station.surface, false);
+        assert_eq!(station.underground, true);
+        assert_eq!(station.entrance, false);
+        assert_eq!(station.exported, false);
+        assert_eq!(station.fixed, false);
+        assert_eq!(station.anonymous, false);
+        assert_eq!(station.wall, false);
+
+        let station = manager
+            .get_by_label("nottsii.countlazloall.thecupcake.009")
+            .unwrap();
+        let station = station.borrow();
+        assert_eq!(station.surface, true);
+        assert_eq!(station.underground, false);
+        assert_eq!(station.entrance, false);
+        assert_eq!(station.exported, false);
+        assert_eq!(station.fixed, false);
+        assert_eq!(station.anonymous, false);
+        assert_eq!(station.wall, false);
+    }
 }

@@ -34,7 +34,9 @@ impl SurveyData {
         }
     }
 
-    /// Retrieve a reference to a [`Station`] by its label.
+    /// Retrieve a reference to a [`Station`] by its label. Only exact matches are returned. To
+    /// retrieve a station by partial label use
+    /// [`get_by_label_part`][`SurveyData::get_by_label_part`].
     pub fn get_by_label(&self, label: &str) -> Option<RefStation> {
         for station in &self.stations {
             if station.borrow().label == label {

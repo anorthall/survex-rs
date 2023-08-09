@@ -5,9 +5,9 @@ use petgraph::graph::{NodeIndex, UnGraph};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-type Stations = Vec<RefStation>;
-type RefStation = Rc<RefCell<Station>>;
-type StationGraph = UnGraph<String, f64>;
+pub type Stations = Vec<RefStation>;
+pub type RefStation = Rc<RefCell<Station>>;
+pub type StationGraph = UnGraph<String, f64>;
 
 /// Handles the creation and management of stations, as well as holding the
 /// [`graph`][`petgraph::graph::Graph`] of stations.
@@ -49,6 +49,16 @@ impl SurveyData {
     pub fn get_by_coords(&self, coords: &Point) -> Option<RefStation> {
         for station in &self.stations {
             if station.borrow().coords == *coords {
+                return Some(Rc::clone(station));
+            }
+        }
+        None
+    }
+
+    /// Retrieve a reference to a [`Station`] by its index in the graph.
+    pub fn get_by_index(&self, index: NodeIndex) -> Option<RefStation> {
+        for station in &self.stations {
+            if station.borrow().index == index {
                 return Some(Rc::clone(station));
             }
         }

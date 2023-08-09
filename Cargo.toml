@@ -8,12 +8,14 @@ readme = "README.md"
 authors = ["Andrew Northall <andrew@northall.me.uk>"]
 keywords = ["caving", "caves", "cave-survey", "survex", "bindings"]
 categories = ["api-bindings", "external-ffi-bindings", "science::geo"]
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 include = ["**/*.rs", "lib/**/*", "Cargo.toml", "README.md", "LICENCE"]
 
 [dependencies]
+uuid = { version = "1.4.1", features = ["v4", "fast-rng"] }
 petgraph = "0.6.3"
+log = "0.4"
 
 [build-dependencies]
 bindgen = "0.66.1"

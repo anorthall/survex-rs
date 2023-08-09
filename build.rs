@@ -7,7 +7,9 @@ fn main() {
         .expect("Cannot find survex/src directory");
 
     let headers_path = libdir_path.join("img.h");
-    let headers_path_str = headers_path.to_str().expect("Cannot convert path to string");
+    let headers_path_str = headers_path
+        .to_str()
+        .expect("Cannot convert path to string");
 
     let obj_path = libdir_path.join("img.o");
     let lib_path = libdir_path.join("libimg.a");

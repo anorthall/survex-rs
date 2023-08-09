@@ -7,10 +7,12 @@
 use crate::data::SurveyData;
 use crate::station::Point;
 use crate::survex;
+use log::trace;
 use std::error::Error;
 use std::ffi::{c_char, CStr};
 use std::path::PathBuf;
 use std::ptr;
+use uuid::Uuid;
 
 /// Create a [`SurveyData`] instance from a Survex file.
 ///
@@ -26,7 +28,7 @@ pub fn load_from_path(path: PathBuf) -> Result<SurveyData, Box<dyn Error>> {
         .as_ptr() as *const c_char;
 
     // Create an SurveyData instance to store and update data as it is read.
-    let mut manager = SurveyData::new();
+    let mut data = SurveyData::new();
 
     // The way Survex 3D file reading works is that it will first spit out a bunch of coordinates
     // and centrelines (determined by MOVE and LINE) commands, and it will then later give names
@@ -44,6 +46,7 @@ pub fn load_from_path(path: PathBuf) -> Result<SurveyData, Box<dyn Error>> {
     // command to create a leg between two points).
     let pimg;
     let (mut x, mut y, mut z) = (-1.0, -1.0, -1.0);
+    let mut label = "";
     let mut p = survex::img_point {
         x: 0.0,
         y: 0.0,
@@ -83,19 +86,21 @@ pub fn load_from_path(path: PathBuf) -> Result<SurveyData, Box<dyn Error>> {
             let from_coords = Point::new(x, y, z);
             let to_coords = Point::new(p.x, p.y, p.z);
             connections.push((from_coords, to_coords));
+            trace!("LINE: {:?} -> {:?}", from_coords, to_coords);
 
             (x, y, z) = (p.x, p.y, p.z);
         } else if result == 2 {
             // CROSS command
         } else if result == 3 {
             // LABEL command
-            let (label, flags);
+            let flags;
             unsafe {
                 label = CStr::from_ptr((*pimg).label).to_str().unwrap();
                 flags = (*pimg).flags & 0x7f;
             }
             let coords = Point::new(p.x, p.y, p.z);
-            let (station, _) = manager.add_or_update(coords, label);
+            let (station, _) = data.add_or_update(coords, label);
+            trace!("LABEL: {:?} -> {:?}", coords, label);
 
             // Set the flags for the station
             if flags & 0x01 != 0 {
@@ -114,24 +119,31 @@ pub fn load_from_path(path: PathBuf) -> Result<SurveyData, Box<dyn Error>> {
                 station.borrow_mut().fixed = true;
             }
             if flags & 0x20 != 0 {
+                // Anonymous stations are given a UUID as their label
                 station.borrow_mut().anonymous = true;
+                station.borrow_mut().label = Uuid::new_v4().to_string();
             }
             if flags & 0x40 != 0 {
                 station.borrow_mut().wall = true;
             }
         } else if result == 4 {
             // XSECT command
-            let (l, r, u, d, label);
+            let (l, r, u, d, flags);
             unsafe {
                 l = (*pimg).l;
                 r = (*pimg).r;
                 u = (*pimg).u;
                 d = (*pimg).d;
-                label = CStr::from_ptr((*pimg).label).to_str().unwrap();
+                flags = (*pimg).flags & 0x7f;
+
+                // If 0x20 flag is set, do *not* update the label buffer, and instead use the
+                // previous label.
+                if flags & 0x20 == 0 {
+                    label = CStr::from_ptr((*pimg).label).to_str().unwrap();
+                }
             }
 
-            manager
-                .get_by_label(label)
+            data.get_by_label(label)
                 .unwrap_or_else(|| panic!("Could not find station with label {:?}", label))
                 .borrow_mut()
                 .lrud
@@ -151,12 +163,12 @@ pub fn load_from_path(path: PathBuf) -> Result<SurveyData, Box<dyn Error>> {
     // corresponds to each set of coordinates. We will then add the connection to the graph.
     let mut node_connections = Vec::new();
     for (p1, p2) in connections.iter() {
-        let from_station_node_index = manager
+        let from_station_node_index = data
             .get_by_coords(p1)
             .unwrap_or_else(|| panic!("Could not find station with coordinates {:?}", p1))
             .borrow()
             .index;
-        let to_station_node_index = manager
+        let to_station_node_index = data
             .get_by_coords(p2)
             .unwrap_or_else(|| panic!("Could not find station with coordinates {:?}", p2))
             .borrow()
@@ -164,9 +176,9 @@ pub fn load_from_path(path: PathBuf) -> Result<SurveyData, Box<dyn Error>> {
         node_connections.push((from_station_node_index, to_station_node_index));
     }
 
-    manager.graph.extend_with_edges(&node_connections);
+    data.graph.extend_with_edges(&node_connections);
 
-    Ok(manager)
+    Ok(data)
 }
 
 #[cfg(test)]

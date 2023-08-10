@@ -187,11 +187,9 @@ pub fn load_from_path(path: PathBuf) -> Result<SurveyData, Box<dyn Error>> {
         connections.len()
     );
 
-    // Survex file reading is complete. We now need to compile our list of connections between
-    // two points into a list of connections between two nodes in the graph. To do this, we will
-    // loop through the connections vector and find the index of the node in the graph which
-    // corresponds to each set of coordinates. We will then add the connection to the graph.
-    let mut node_connections = Vec::new();
+    // Survex file reading is complete. We now need to iterate over the connections vector and
+    // add the connections to the graph by looking up the node index for each station and adding
+    // an edge between them with the distance between the two stations as the weight.
     for (p1, p2) in connections.iter() {
         let from_station_node_index = data
             .get_by_coords(p1)
@@ -203,15 +201,13 @@ pub fn load_from_path(path: PathBuf) -> Result<SurveyData, Box<dyn Error>> {
             .unwrap_or_else(|| panic!("Could not find station with coordinates {:?}", p2))
             .borrow()
             .index;
-        node_connections.push((from_station_node_index, to_station_node_index));
+        data.graph.add_edge(
+            from_station_node_index,
+            to_station_node_index,
+            p1.distance(p2),
+        );
     }
 
-    data.graph.extend_with_edges(&node_connections);
-
-    trace!(
-        "Extended graph with {} connections.",
-        node_connections.len()
-    );
     trace!(
         "Graph now has {} nodes and {} edges.",
         data.graph.node_count(),
